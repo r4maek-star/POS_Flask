@@ -87,7 +87,7 @@ class Product(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     sku = db.Column(db.String(50), unique=True, nullable=False)
-    barcode = db.Column(db.String(100), nullable=True)
+    barcodes = db.Column(db.Text, nullable=True)  # JSON array of barcodes
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
     price = db.Column(db.Float, nullable=False)
     cost_price = db.Column(db.Float, nullable=True)
@@ -101,6 +101,24 @@ class Product(db.Model):
 
     category = db.relationship('Category', backref=db.backref('products', lazy=True))
     inventories = db.relationship('Inventory', backref='product', lazy=True)
+
+    @property
+    def barcode_list(self):
+        """Get barcodes as a list"""
+        if self.barcodes:
+            try:
+                return json.loads(self.barcodes)
+            except:
+                return [self.barcodes] if self.barcodes else []
+        return []
+
+    @barcode_list.setter
+    def barcode_list(self, value):
+        """Set barcodes from a list"""
+        if isinstance(value, list):
+            self.barcodes = json.dumps(value)
+        else:
+            self.barcodes = json.dumps([value]) if value else None
 
 class Inventory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -202,12 +220,11 @@ class ProductForm(FlaskForm):
     name = StringField('Product Name', validators=[DataRequired()])
     description = TextAreaField('Description')
     sku = StringField('SKU', validators=[DataRequired()])
-    barcode = StringField('Barcode')
-    category_id = SelectField('Category', coerce=int)
+    category_id = SelectField('Category', coerce=int, validators=[Optional()])
     price = FloatField('Price', validators=[DataRequired()])
-    cost_price = FloatField('Cost Price')
-    min_stock = IntegerField('Minimum Stock', default=0)
-    max_stock = IntegerField('Maximum Stock')
+    cost_price = FloatField('Cost Price', validators=[Optional()])
+    min_stock = IntegerField('Minimum Stock', default=0, validators=[Optional()])
+    max_stock = IntegerField('Maximum Stock', validators=[Optional()])
     submit = SubmitField('Save Product')
 
 class CategoryForm(FlaskForm):
@@ -251,6 +268,18 @@ class BranchForm(FlaskForm):
 class HeldTransactionForm(FlaskForm):
     notes = TextAreaField('Notes')
     submit = SubmitField('Hold Transaction')
+
+# Context processors
+@app.context_processor
+def inject_held_transactions_count():
+    """Make held transactions count available in all templates"""
+    if current_user.is_authenticated:
+        count = HeldTransaction.query.filter(
+            HeldTransaction.user_id == current_user.id,
+            HeldTransaction.expires_at > datetime.utcnow()
+        ).count()
+        return {'held_transactions_count': count}
+    return {'held_transactions_count': 0}
 
 # Routes
 @app.route('/')
@@ -311,7 +340,29 @@ def logout():
 @app.route('/pos')
 @login_required
 def pos():
-    products = Product.query.filter_by(is_active=True).all()
+    search = request.args.get('search', '').strip()
+    action = request.args.get('action', '')
+
+    # Base query for products
+    query = Product.query.filter_by(is_active=True)
+
+    if search:
+        # Search in product name, SKU, and barcodes
+        search_conditions = [
+            Product.name.contains(search),
+            Product.sku.contains(search)
+        ]
+
+        # Also search in barcodes JSON field
+        if search:
+            # For exact barcode matches in the JSON array
+            search_conditions.append(Product.barcodes.contains(search))
+
+        query = query.filter(db.or_(*search_conditions))
+
+    # Order by name for consistent display
+    products = query.order_by(Product.name).all()
+
     customers = Customer.query.filter_by(is_active=True).all()
     held_transactions = HeldTransaction.query.filter(
         HeldTransaction.user_id == current_user.id,
@@ -321,10 +372,12 @@ def pos():
     held_transactions_count = len(held_transactions)
 
     return render_template('pos.html',
-                         products=products,
-                         customers=customers,
-                         held_transactions=held_transactions,
-                         held_transactions_count=held_transactions_count)
+                          products=products,
+                          customers=customers,
+                          held_transactions=held_transactions,
+                          held_transactions_count=held_transactions_count,
+                          search=search,
+                          action=action)
 
 @app.route('/api/hold_transaction', methods=['POST'])
 @login_required
@@ -416,14 +469,14 @@ def products():
     per_page = 20
     search = request.args.get('search', '')
 
-    query = Product.query.filter_by(is_active=True)
+    query = Product.query.filter_by(is_active=True).order_by(Product.created_at.desc())
 
     if search:
         query = query.filter(
             db.or_(
                 Product.name.contains(search),
                 Product.sku.contains(search),
-                Product.barcode.contains(search)
+                Product.barcodes.contains(search)  # Search in barcodes JSON
             )
         )
 
@@ -449,20 +502,31 @@ def add_product():
         # Check if SKU already exists
         existing_product = Product.query.filter_by(sku=form.sku.data).first()
         if existing_product:
+            print(f"SKU {form.sku.data} already exists")
             flash('SKU already exists', 'error')
             return render_template('product_form.html', form=form, title='Add Product')
+
+        # Handle multiple barcodes
+        barcodes = request.form.get('barcodes')
+        if barcodes:
+            try:
+                barcode_list = json.loads(barcodes)
+            except:
+                barcode_list = []
+        else:
+            barcode_list = []
 
         product = Product(
             name=form.name.data,
             description=form.description.data,
             sku=form.sku.data,
-            barcode=form.barcode.data,
             category_id=form.category_id.data if form.category_id.data != 0 else None,
             price=form.price.data,
             cost_price=form.cost_price.data,
             min_stock=form.min_stock.data,
             max_stock=form.max_stock.data
         )
+        product.barcode_list = barcode_list
 
         db.session.add(product)
         db.session.commit()
@@ -503,12 +567,22 @@ def edit_product(id):
         ).first()
         if existing_product:
             flash('SKU already exists', 'error')
-            return render_template('product_form.html', form=form, title='Edit Product')
+            return render_template('product_form.html', form=form, title='Edit Product', product=product)
+
+        # Handle multiple barcodes
+        barcodes = request.form.get('barcodes')
+        if barcodes:
+            try:
+                barcode_list = json.loads(barcodes)
+            except:
+                barcode_list = []
+        else:
+            barcode_list = []
 
         product.name = form.name.data
         product.description = form.description.data
         product.sku = form.sku.data
-        product.barcode = form.barcode.data
+        product.barcode_list = barcode_list
         product.category_id = form.category_id.data if form.category_id.data != 0 else None
         product.price = form.price.data
         product.cost_price = form.cost_price.data
@@ -521,7 +595,7 @@ def edit_product(id):
         flash('Product updated successfully', 'success')
         return redirect(url_for('products'))
 
-    return render_template('product_form.html', form=form, title='Edit Product')
+    return render_template('product_form.html', form=form, title='Edit Product', product=product)
 
 @app.route('/product/delete/<int:id>', methods=['POST'])
 @login_required

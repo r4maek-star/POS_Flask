@@ -37,13 +37,23 @@
                 <div class="dropdown me-2">
                     <button class="btn btn-outline-light position-relative" type="button" id="notifications-dropdown" data-bs-toggle="dropdown">
                         <i class="fas fa-bell"></i>
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notification-badge">
-                            <span class="visually-hidden">unread notifications</span>
+                        {% if held_transactions_count > 0 %}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="notification-badge">
+                            {{ held_transactions_count }}
+                            <span class="visually-hidden">held transactions</span>
                         </span>
+                        {% endif %}
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notifications-dropdown">
                         <li><h6 class="dropdown-header">Notifications</h6></li>
-                        <li><a class="dropdown-item" href="#">No new notifications</a></li>
+                        {% if held_transactions_count > 0 %}
+                        <li><a class="dropdown-item" href="{{ url_for('pos', action='show_held') }}">
+                            <i class="fas fa-pause text-warning me-2"></i>
+                            {{ held_transactions_count }} Held Transaction{{ 's' if held_transactions_count > 1 else '' }}
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% endif %}
+                        <li><a class="dropdown-item text-muted" href="#">No other notifications</a></li>
                     </ul>
                 </div>
 
@@ -170,5 +180,50 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     {% block extra_scripts %}{% endblock %}
+
+    <script>
+    // Update held transactions count in notifications
+    function updateHeldTransactionsCount() {
+        fetch('/api/held_transactions_count')
+            .then(response => response.json())
+            .then(data => {
+                const badge = document.getElementById('notification-badge');
+                const count = data.count;
+
+                if (count > 0) {
+                    if (!badge) {
+                        // Create badge if it doesn't exist
+                        const button = document.getElementById('notifications-dropdown');
+                        const newBadge = document.createElement('span');
+                        newBadge.className = 'position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger';
+                        newBadge.id = 'notification-badge';
+                        newBadge.innerHTML = count + '<span class="visually-hidden">held transactions</span>';
+                        button.appendChild(newBadge);
+                    } else {
+                        badge.innerHTML = count + '<span class="visually-hidden">held transactions</span>';
+                        badge.classList.remove('d-none');
+                    }
+
+                    // Update dropdown content
+                    const dropdown = document.querySelector('#notifications-dropdown + .dropdown-menu');
+                    const existingItem = dropdown.querySelector('.dropdown-item[href*="pos"]');
+                    if (existingItem) {
+                        existingItem.innerHTML = '<i class="fas fa-pause text-warning me-2"></i>' + count + ' Held Transaction' + (count > 1 ? 's' : '');
+                    }
+                } else {
+                    if (badge) {
+                        badge.classList.add('d-none');
+                    }
+                }
+            })
+            .catch(error => console.error('Error updating held transactions count:', error));
+    }
+
+    // Update count every 30 seconds
+    setInterval(updateHeldTransactionsCount, 30000);
+
+    // Update count when page loads
+    document.addEventListener('DOMContentLoaded', updateHeldTransactionsCount);
+    </script>
 </body>
 </html>

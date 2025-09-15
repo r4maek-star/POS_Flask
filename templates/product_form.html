@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('products') }}">Products</a></li>
+        <li class="breadcrumb-item active">{{ title }}</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-box me-2"></i>{{ title }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data" id="productForm">
+                    {{ form.hidden_tag() }}
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.name.label(class="form-label") }}
+                                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                                {% if form.name.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.name.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.sku.label(class="form-label") }}
+                                {{ form.sku(class="form-control" + (" is-invalid" if form.sku.errors else "")) }}
+                                {% if form.sku.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.sku.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows="3") }}
+                    </div>
+
+                    <!-- Multiple Barcodes Section -->
+                    <div class="mb-3">
+                        <label class="form-label">Barcodes</label>
+                        <div id="barcodes-container">
+                            {% set existing_barcodes = product.barcode_list if product else [] %}
+                            {% if existing_barcodes %}
+                                {% for barcode in existing_barcodes %}
+                                <div class="input-group mb-2 barcode-item">
+                                    <input type="text" class="form-control barcode-input" placeholder="Enter barcode" value="{{ barcode }}">
+                                    <button class="btn btn-outline-danger remove-barcode" type="button"{% if existing_barcodes|length <= 1 %} style="display: none;"{% endif %}>
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="input-group mb-2 barcode-item">
+                                    <input type="text" class="form-control barcode-input" placeholder="Enter barcode" value="">
+                                    <button class="btn btn-outline-danger remove-barcode" type="button" style="display: none;">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" type="button" id="add-barcode">
+                            <i class="fas fa-plus me-1"></i>Add Another Barcode
+                        </button>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.category_id.label(class="form-label") }}
+                                {{ form.category_id(class="form-select") }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Product Image</label>
+                                <input type="file" class="form-control" name="image" accept="image/*">
+                                <div class="form-text">Optional. Max file size: 16MB</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.price.label(class="form-label") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else ""), step="0.01") }}
+                                </div>
+                                {% if form.price.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.price.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.cost_price.label(class="form-label") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.cost_price(class="form-control", step="0.01") }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.min_stock.label(class="form-label") }}
+                                {{ form.min_stock(class="form-control", type="number", min="0") }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.max_stock.label(class="form-label") }}
+                                {{ form.max_stock(class="form-control", type="number", min="0") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('products') }}" class="btn btn-secondary">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </a>
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    // Handle multiple barcodes
+    let barcodeCount = 1;
+
+    // Add barcode input
+    $('#add-barcode').click(function() {
+        barcodeCount++;
+        const barcodeHtml = `
+            <div class="input-group mb-2 barcode-item">
+                <input type="text" class="form-control barcode-input" placeholder="Enter barcode ${barcodeCount}">
+                <button class="btn btn-outline-danger remove-barcode" type="button">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        $('#barcodes-container').append(barcodeHtml);
+        updateRemoveButtons();
+    });
+
+    // Remove barcode input
+    $(document).on('click', '.remove-barcode', function() {
+        $(this).closest('.barcode-item').remove();
+        barcodeCount--;
+        updateRemoveButtons();
+    });
+
+    // Update remove button visibility
+    function updateRemoveButtons() {
+        const barcodeItems = $('.barcode-item');
+        if (barcodeItems.length > 1) {
+            $('.remove-barcode').show();
+        } else {
+            $('.remove-barcode').hide();
+        }
+    }
+
+    // Initialize remove buttons
+    updateRemoveButtons();
+
+    // Form submission - collect barcodes
+    $('#productForm').submit(function(e) {
+        const barcodes = [];
+        $('.barcode-input').each(function() {
+            const value = $(this).val().trim();
+            if (value) {
+                barcodes.push(value);
+            }
+        });
+
+        // Add barcodes as hidden inputs or JSON
+        if (barcodes.length > 0) {
+            // Remove existing hidden barcode inputs
+            $('input[name="barcodes"]').remove();
+
+            // Add barcodes as JSON
+            $('<input>').attr({
+                type: 'hidden',
+                name: 'barcodes',
+                value: JSON.stringify(barcodes)
+            }).appendTo('#productForm');
+        }
+    });
+});
+</script>
+{% endblock %}
