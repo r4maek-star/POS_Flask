@@ -1093,8 +1093,9 @@ def add_purchase_invoice():
         })
 
     suppliers = Supplier.query.filter_by(is_active=True).all()
+    categories = Category.query.filter_by(is_active=True).all()
     today_date = datetime.now().strftime('%Y-%m-%d')
-    return render_template('purchase_invoice_form.html', title='Add Purchase Invoice', suppliers=suppliers, today_date=today_date)
+    return render_template('purchase_invoice_form.html', title='Add Purchase Invoice', suppliers=suppliers, categories=categories, today_date=today_date)
 
 @app.route('/api/products/search')
 @login_required
@@ -1124,6 +1125,63 @@ def search_products():
         })
 
     return jsonify(results)
+
+@app.route('/api/products/list')
+@login_required
+def products_list():
+    page = request.args.get('page', 1, type=int)
+    per_page = 50  # Load more products for modal
+    search = request.args.get('search', '')
+    category_filter = request.args.get('category', '')
+
+    query = Product.query.filter_by(is_active=True)
+
+    if search:
+        query = query.filter(
+            db.or_(
+                Product.name.contains(search),
+                Product.sku.contains(search),
+                Product.barcodes.contains(search)
+            )
+        )
+
+    if category_filter:
+        query = query.filter(Product.category_id == category_filter)
+
+    query = query.order_by(Product.name)
+
+    # Get paginated results
+    products_page = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Get total stock for each product
+    products_data = []
+    for product in products_page.items:
+        total_stock = 0
+        for inventory in product.inventories:
+            total_stock += inventory.quantity
+
+        products_data.append({
+            'id': product.id,
+            'name': product.name,
+            'sku': product.sku,
+            'price': product.price,
+            'cost_price': product.cost_price,
+            'image': product.image,
+            'category': {
+                'id': product.category.id if product.category else None,
+                'name': product.category.name if product.category else None
+            } if product.category else None,
+            'total_stock': total_stock,
+            'min_stock': product.min_stock,
+            'box_qty': product.box_qty
+        })
+
+    return jsonify({
+        'products': products_data,
+        'total': products_page.total,
+        'pages': products_page.pages,
+        'current_page': products_page.page
+    })
 
 @app.route('/customers')
 @login_required
