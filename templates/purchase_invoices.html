@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Purchase Invoices - POS System{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+<li class="breadcrumb-item active">Purchase Invoices</li>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h3 mb-0">Purchase Invoices</h1>
+            <a href="{{ url_for('add_purchase_invoice') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add Purchase Invoice
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" name="search" value="{{ search }}" placeholder="Search by invoice number or supplier...">
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" name="status">
+                            <option value="">All Status</option>
+                            <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
+                            <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                            <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-search me-1"></i>Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Invoices Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Purchase Invoice List</h6>
+            </div>
+            <div class="card-body">
+                {% if invoices.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Invoice Number</th>
+                                <th>Supplier</th>
+                                <th>Date</th>
+                                <th>Total Amount</th>
+                                <th>Items</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in invoices.items %}
+                            <tr>
+                                <td><strong>{{ invoice.invoice_number }}</strong></td>
+                                <td>{{ invoice.supplier.name }}</td>
+                                <td>{{ invoice.invoice_date.strftime('%Y-%m-%d') }}</td>
+                                <td><strong>${{ "%.2f"|format(invoice.total_amount) }}</strong></td>
+                                <td>{{ invoice.items|length }}</td>
+                                <td>
+                                    {% if invoice.status == 'draft' %}
+                                        <span class="badge bg-warning">Draft</span>
+                                    {% elif invoice.status == 'completed' %}
+                                        <span class="badge bg-success">Completed</span>
+                                    {% elif invoice.status == 'cancelled' %}
+                                        <span class="badge bg-secondary">Cancelled</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('purchase_invoice_detail', id=invoice.id) }}" class="btn btn-sm btn-outline-info" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {% if invoice.status == 'draft' %}
+                                        <button class="btn btn-sm btn-outline-success" title="Complete">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if invoices.has_prev or invoices.has_next %}
+                <nav aria-label="Invoice pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if invoices.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('purchase_invoices', page=invoices.prev_num, search=search, status=status_filter) }}">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
+                        </li>
+                        {% endif %}
+
+                        {% for page_num in invoices.iter_pages() %}
+                        {% if page_num %}
+                        <li class="page-item {% if page_num == invoices.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('purchase_invoices', page=page_num, search=search, status=status_filter) }}">{{ page_num }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        {% if invoices.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('purchase_invoices', page=invoices.next_num, search=search, status=status_filter) }}">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-file-invoice-dollar fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No purchase invoices found</h5>
+                    <p class="text-muted">{% if search or status_filter %}No invoices match your search criteria.{% else %}Start by adding your first purchase invoice.{% endif %}</p>
+                    {% if not search and not status_filter %}
+                    <a href="{{ url_for('add_purchase_invoice') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add First Invoice
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

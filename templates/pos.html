@@ -372,14 +372,35 @@ $(document).ready(function() {
             return;
         }
 
-        // Here you would typically send the transaction data to the server
-        alert('Sale completed successfully! Total: $' + total.toFixed(2));
-        cart = [];
-        currentCustomer = null;
-        updateCartDisplay();
-        $('#customer-select').val('');
-        $('#amount-received').val('');
-        $('#change-amount').text('$0.00');
+        // Send transaction data to server
+        $.ajax({
+            url: '/api/complete_sale',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                cart: cart,
+                customer_id: currentCustomer ? currentCustomer.id : null,
+                payment_method: paymentMethod,
+                amount_received: amountReceived,
+                notes: ''
+            }),
+            success: function(response) {
+                if (response.success) {
+                    alert('Sale completed successfully! Transaction ID: ' + response.transaction_id + ' Total: $' + response.total.toFixed(2));
+                    cart = [];
+                    currentCustomer = null;
+                    updateCartDisplay();
+                    $('#customer-select').val('');
+                    $('#amount-received').val('');
+                    $('#change-amount').text('$0.00');
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('Error completing sale');
+            }
+        });
     });
 
     // Helper functions

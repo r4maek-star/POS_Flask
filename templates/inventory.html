@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory - POS System{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+<li class="breadcrumb-item active">Inventory</li>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">Inventory Management</h1>
+        <p class="text-muted">Monitor and manage your product stock levels</p>
+    </div>
+</div>
+
+<!-- Low Stock Alert -->
+{% if low_stock_items %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-warning">
+            <h6 class="alert-heading">
+                <i class="fas fa-exclamation-triangle me-2"></i>Low Stock Alert
+            </h6>
+            <p class="mb-2">The following items are running low on stock:</p>
+            <div class="row">
+                {% for product, inventory in low_stock_items[:5] %}
+                <div class="col-md-4 mb-2">
+                    <strong>{{ product.name }}</strong> - {{ inventory.quantity }} remaining
+                    (Min: {{ product.min_stock }})
+                </div>
+                {% endfor %}
+                {% if low_stock_items|length > 5 %}
+                <div class="col-12">
+                    <small class="text-muted">... and {{ low_stock_items|length - 5 }} more items</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Search and Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Search Products</label>
+                        <input type="text" class="form-control" name="search" value="{{ search }}" placeholder="Search by name or SKU...">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Branch</label>
+                        <select class="form-select" name="branch">
+                            <option value="">All Branches</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch.id }}" {% if branch_filter == branch.id|string %}selected{% endif %}>
+                                {{ branch.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-search me-1"></i>Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inventory Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Current Inventory</h6>
+            </div>
+            <div class="card-body">
+                {% if results.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Branch</th>
+                                <th>Stock Level</th>
+                                <th>Status</th>
+                                <th>Last Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product, inventory in results.items %}
+                            <tr>
+                                <td>
+                                    <strong>{{ product.name }}</strong>
+                                    {% if product.description %}
+                                    <br><small class="text-muted">{{ product.description[:50] }}{% if product.description|length > 50 %}...{% endif %}</small>
+                                    {% endif %}
+                                </td>
+                                <td><code>{{ product.sku }}</code></td>
+                                <td>{{ inventory.branch.name }}</td>
+                                <td>
+                                    <span class="{% if inventory.quantity <= product.min_stock %}text-danger{% elif inventory.quantity <= product.min_stock * 2 %}text-warning{% else %}text-success{% endif %} fw-bold">
+                                        {{ inventory.quantity }}
+                                    </span>
+                                    {% if product.min_stock > 0 %}
+                                    <br><small class="text-muted">Min: {{ product.min_stock }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if inventory.quantity <= product.min_stock %}
+                                        <span class="badge bg-danger">Low Stock</span>
+                                    {% elif inventory.quantity <= product.min_stock * 2 %}
+                                        <span class="badge bg-warning">Warning</span>
+                                    {% else %}
+                                        <span class="badge bg-success">In Stock</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if inventory.last_updated %}
+                                        {{ inventory.last_updated.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                        Never
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('product_movements', id=product.id) }}" class="btn btn-sm btn-outline-info" title="View Movements">
+                                            <i class="fas fa-history"></i>
+                                        </a>
+                                        <a href="{{ url_for('add_product_movement', id=product.id) }}" class="btn btn-sm btn-outline-primary" title="Add Movement">
+                                            <i class="fas fa-plus"></i>
+                                        </a>
+                                        <a href="{{ url_for('edit_product', id=product.id) }}" class="btn btn-sm btn-outline-secondary" title="Edit Product">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if results.has_prev or results.has_next %}
+                <nav aria-label="Inventory pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if results.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('inventory', page=results.prev_num, search=search, branch=branch_filter) }}">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
+                        </li>
+                        {% endif %}
+
+                        {% for page_num in results.iter_pages() %}
+                        {% if page_num %}
+                        <li class="page-item {% if page_num == results.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('inventory', page=page_num, search=search, branch=branch_filter) }}">{{ page_num }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        {% if results.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('inventory', page=results.next_num, search=search, branch=branch_filter) }}">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-boxes fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No inventory items found</h5>
+                    <p class="text-muted">{% if search %}No items match your search criteria.{% else %}No products have been added yet.{% endif %}</p>
+                    {% if not search %}
+                    <a href="{{ url_for('add_product') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add First Product
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -96,6 +96,10 @@ class Product(db.Model):
     track_inventory = db.Column(db.Boolean, default=True)
     min_stock = db.Column(db.Integer, default=0)
     max_stock = db.Column(db.Integer, nullable=True)
+    # New fields
+    box_qty = db.Column(db.Integer, default=1)  # Units per box
+    is_favorite = db.Column(db.Boolean, default=False)  # Favorite product
+    expiry_date = db.Column(db.Date, nullable=True)  # Expiration date
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -127,6 +131,8 @@ class Inventory(db.Model):
     quantity = db.Column(db.Integer, default=0)
     reserved_quantity = db.Column(db.Integer, default=0)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    branch = db.relationship('Branch', backref=db.backref('inventories', lazy=True))
 
     __table_args__ = (db.UniqueConstraint('product_id', 'branch_id', name='unique_product_branch'),)
 
@@ -210,6 +216,51 @@ class SupportTicket(db.Model):
     user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('created_tickets', lazy=True))
     assignee = db.relationship('User', foreign_keys=[assigned_to], backref=db.backref('assigned_tickets', lazy=True))
 
+class PurchaseInvoice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_number = db.Column(db.String(50), unique=True, nullable=False)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branch.id'), nullable=False)
+    invoice_date = db.Column(db.Date, nullable=False)
+    total_amount = db.Column(db.Float, nullable=False, default=0.0)
+    tax_amount = db.Column(db.Float, default=0.0)
+    discount_amount = db.Column(db.Float, default=0.0)
+    notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), default='draft')  # draft, completed, cancelled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    supplier = db.relationship('Supplier', backref=db.backref('purchase_invoices', lazy=True))
+    user = db.relationship('User', backref=db.backref('purchase_invoices', lazy=True))
+    branch = db.relationship('Branch', backref=db.backref('purchase_invoices', lazy=True))
+    items = db.relationship('PurchaseInvoiceItem', backref='invoice', lazy=True, cascade='all, delete-orphan')
+
+class PurchaseInvoiceItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    purchase_invoice_id = db.Column(db.Integer, db.ForeignKey('purchase_invoice.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_cost = db.Column(db.Float, nullable=False)
+    total = db.Column(db.Float, nullable=False)
+
+    product = db.relationship('Product', backref=db.backref('purchase_invoice_items', lazy=True))
+
+class ProductMovement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branch.id'), nullable=False)
+    movement_type = db.Column(db.String(20), nullable=False)  # purchase, sale, return, transfer, adjustment
+    quantity = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reason = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    product = db.relationship('Product', backref=db.backref('movements', lazy=True))
+    branch = db.relationship('Branch', backref=db.backref('movements', lazy=True))
+    user = db.relationship('User', backref=db.backref('movements', lazy=True))
+
 # Forms
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -225,6 +276,10 @@ class ProductForm(FlaskForm):
     cost_price = FloatField('Cost Price', validators=[Optional()])
     min_stock = IntegerField('Minimum Stock', default=0, validators=[Optional()])
     max_stock = IntegerField('Maximum Stock', validators=[Optional()])
+    # New fields
+    box_qty = IntegerField('Units per Box', default=1, validators=[Optional()])
+    is_favorite = SelectField('Favorite Product', choices=[('False', 'No'), ('True', 'Yes')], default='False')
+    expiry_date = StringField('Expiry Date (YYYY-MM-DD)', validators=[Optional()])
     submit = SubmitField('Save Product')
 
 class CategoryForm(FlaskForm):
@@ -460,6 +515,135 @@ def held_transactions_count():
 
     return jsonify({'count': count})
 
+@app.route('/api/complete_sale', methods=['POST'])
+@login_required
+def complete_sale():
+    data = request.get_json()
+    cart = data.get('cart', [])
+    customer_id = data.get('customer_id')
+    payment_method = data.get('payment_method', 'cash')
+    amount_received = data.get('amount_received', 0)
+    notes = data.get('notes', '')
+
+    if not cart:
+        return jsonify({'success': False, 'message': 'Cart is empty'}), 400
+
+    # Calculate totals
+    total_amount = sum(item['price'] * item['quantity'] for item in cart)
+    tax_amount = 0  # You can implement tax calculation here
+    discount_amount = 0  # You can implement discount calculation here
+
+    # Generate unique transaction ID
+    transaction_id = f"SALE{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+
+    # Create transaction
+    transaction = Transaction(
+        transaction_id=transaction_id,
+        customer_id=customer_id,
+        user_id=current_user.id,
+        branch_id=current_user.branch_id or 1,
+        total_amount=total_amount,
+        tax_amount=tax_amount,
+        discount_amount=discount_amount,
+        payment_method=payment_method,
+        notes=notes
+    )
+    db.session.add(transaction)
+    db.session.flush()  # Get transaction.id
+
+    # Create transaction items and movements
+    for item in cart:
+        product_id = item['product_id']
+        quantity = item['quantity']
+        unit_price = item['price']
+
+        # Create transaction item
+        transaction_item = TransactionItem(
+            transaction_id=transaction.id,
+            product_id=product_id,
+            quantity=quantity,
+            unit_price=unit_price,
+            total=unit_price * quantity
+        )
+        db.session.add(transaction_item)
+
+        # Create product movement for sale
+        movement = ProductMovement(
+            product_id=product_id,
+            branch_id=current_user.branch_id or 1,
+            movement_type='sale',
+            quantity=-quantity,  # Negative for stock out
+            user_id=current_user.id,
+            reason='Sale',
+            notes=f'Sold in transaction {transaction_id}'
+        )
+        db.session.add(movement)
+
+        # Update inventory
+        inventory = Inventory.query.filter_by(product_id=product_id, branch_id=current_user.branch_id or 1).first()
+        if inventory:
+            inventory.quantity -= quantity
+            inventory.last_updated = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'transaction_id': transaction_id,
+        'total': total_amount,
+        'message': 'Sale completed successfully'
+    })
+
+@app.route('/inventory')
+@login_required
+def inventory():
+    if current_user.role not in ['admin', 'manager', 'inventory_manager']:
+        flash('Access denied', 'error')
+        return redirect(url_for('index'))
+
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    search = request.args.get('search', '')
+    branch_filter = request.args.get('branch', '')
+
+    # Base query joining Product and Inventory
+    query = db.session.query(Product, Inventory).join(Inventory).filter(Product.is_active == True)
+
+    if search:
+        query = query.filter(
+            db.or_(
+                Product.name.contains(search),
+                Product.sku.contains(search)
+            )
+        )
+
+    if branch_filter:
+        query = query.filter(Inventory.branch_id == branch_filter)
+
+    # Order by product name
+    query = query.order_by(Product.name)
+
+    # Paginate
+    results = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Get branches for filter
+    branches = Branch.query.filter_by(is_active=True).all()
+
+    # Get low stock items
+    low_stock_query = db.session.query(Product, Inventory).join(Inventory).filter(
+        Product.is_active == True,
+        Product.track_inventory == True,
+        Inventory.quantity <= Product.min_stock
+    )
+    low_stock_items = low_stock_query.all()
+
+    return render_template('inventory.html',
+                          results=results,
+                          branches=branches,
+                          search=search,
+                          branch_filter=branch_filter,
+                          low_stock_items=low_stock_items)
+
 @app.route('/products')
 @login_required
 def products():
@@ -514,6 +698,15 @@ def add_product():
         else:
             barcode_list = []
 
+        # Handle expiry date
+        expiry_date = None
+        if form.expiry_date.data:
+            try:
+                expiry_date = datetime.strptime(form.expiry_date.data, '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid expiry date format. Use YYYY-MM-DD', 'error')
+                return render_template('product_form.html', form=form, title='Add Product')
+
         product = Product(
             name=form.name.data,
             description=form.description.data,
@@ -522,7 +715,10 @@ def add_product():
             price=form.price.data,
             cost_price=form.cost_price.data,
             min_stock=form.min_stock.data,
-            max_stock=form.max_stock.data
+            max_stock=form.max_stock.data,
+            box_qty=form.box_qty.data,
+            is_favorite=form.is_favorite.data == 'True',
+            expiry_date=expiry_date
         )
         product.barcode_list = barcode_list
 
@@ -577,6 +773,15 @@ def edit_product(id):
         else:
             barcode_list = []
 
+        # Handle expiry date
+        expiry_date = None
+        if form.expiry_date.data:
+            try:
+                expiry_date = datetime.strptime(form.expiry_date.data, '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid expiry date format. Use YYYY-MM-DD', 'error')
+                return render_template('product_form.html', form=form, title='Edit Product', product=product)
+
         product.name = form.name.data
         product.description = form.description.data
         product.sku = form.sku.data
@@ -586,6 +791,9 @@ def edit_product(id):
         product.cost_price = form.cost_price.data
         product.min_stock = form.min_stock.data
         product.max_stock = form.max_stock.data
+        product.box_qty = form.box_qty.data
+        product.is_favorite = form.is_favorite.data == 'True'
+        product.expiry_date = expiry_date
         product.updated_at = datetime.utcnow()
 
         db.session.commit()
@@ -606,6 +814,48 @@ def delete_product(id):
     db.session.commit()
 
     return jsonify({'success': True, 'message': 'Product deleted successfully'})
+
+@app.route('/product/<int:id>/movements')
+@login_required
+def product_movements(id):
+    product = Product.query.get_or_404(id)
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    movements = ProductMovement.query.filter_by(product_id=id).order_by(ProductMovement.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    return render_template('product_movements.html', product=product, movements=movements)
+
+@app.route('/product/<int:id>/add_movement', methods=['GET', 'POST'])
+@login_required
+def add_product_movement(id):
+    product = Product.query.get_or_404(id)
+    if request.method == 'POST':
+        movement_type = request.form.get('movement_type')
+        quantity = int(request.form.get('quantity'))
+        reason = request.form.get('reason')
+        notes = request.form.get('notes')
+        branch_id = current_user.branch_id or 1
+
+        movement = ProductMovement(
+            product_id=id,
+            branch_id=branch_id,
+            movement_type=movement_type,
+            quantity=quantity,
+            user_id=current_user.id,
+            reason=reason,
+            notes=notes
+        )
+        db.session.add(movement)
+
+        # Update inventory
+        inventory = Inventory.query.filter_by(product_id=id, branch_id=branch_id).first()
+        if inventory:
+            inventory.quantity += quantity
+            db.session.commit()
+
+        flash('Movement added successfully', 'success')
+        return redirect(url_for('product_movements', id=id))
+
+    return render_template('add_movement.html', product=product)
 
 @app.route('/categories')
 @login_required
@@ -638,6 +888,242 @@ def add_category():
         return redirect(url_for('categories'))
 
     return render_template('category_form.html', form=form, title='Add Category')
+
+@app.route('/category/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_category(id):
+    if current_user.role not in ['admin', 'manager', 'inventory_manager']:
+        flash('Access denied', 'error')
+        return redirect(url_for('categories'))
+
+    category = Category.query.get_or_404(id)
+    form = CategoryForm(obj=category)
+    categories = Category.query.filter_by(is_active=True).all()
+    form.parent_id.choices = [(0, 'No Parent')] + [(c.id, c.name) for c in categories if c.id != id]
+
+    if form.validate_on_submit():
+        category.name = form.name.data
+        category.description = form.description.data
+        category.parent_id = form.parent_id.data if form.parent_id.data != 0 else None
+
+        db.session.commit()
+
+        flash('Category updated successfully', 'success')
+        return redirect(url_for('categories'))
+
+    return render_template('category_form.html', form=form, title='Edit Category', category=category)
+
+@app.route('/category/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_category(id):
+    if current_user.role not in ['admin', 'manager', 'inventory_manager']:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    category = Category.query.get_or_404(id)
+    category.is_active = False
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Category deleted successfully'})
+
+@app.route('/suppliers')
+@login_required
+def suppliers():
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    search = request.args.get('search', '')
+
+    query = Supplier.query.filter_by(is_active=True)
+
+    if search:
+        query = query.filter(
+            db.or_(
+                Supplier.name.contains(search),
+                Supplier.email.contains(search),
+                Supplier.phone.contains(search)
+            )
+        )
+
+    suppliers = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('suppliers.html', suppliers=suppliers, search=search)
+
+@app.route('/supplier/add', methods=['GET', 'POST'])
+@login_required
+def add_supplier():
+    if request.method == 'POST':
+        supplier = Supplier(
+            name=request.form.get('name'),
+            email=request.form.get('email'),
+            phone=request.form.get('phone'),
+            address=request.form.get('address')
+        )
+
+        db.session.add(supplier)
+        db.session.commit()
+
+        flash('Supplier added successfully', 'success')
+        return redirect(url_for('suppliers'))
+
+    return render_template('supplier_form.html', title='Add Supplier')
+
+@app.route('/supplier/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_supplier(id):
+    supplier = Supplier.query.get_or_404(id)
+
+    if request.method == 'POST':
+        supplier.name = request.form.get('name')
+        supplier.email = request.form.get('email')
+        supplier.phone = request.form.get('phone')
+        supplier.address = request.form.get('address')
+
+        db.session.commit()
+
+        flash('Supplier updated successfully', 'success')
+        return redirect(url_for('suppliers'))
+
+    return render_template('supplier_form.html', title='Edit Supplier', supplier=supplier)
+
+@app.route('/supplier/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_supplier(id):
+    supplier = Supplier.query.get_or_404(id)
+    supplier.is_active = False
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Supplier deleted successfully'})
+
+@app.route('/purchase_invoices')
+@login_required
+def purchase_invoices():
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    search = request.args.get('search', '')
+    status_filter = request.args.get('status', '')
+
+    query = PurchaseInvoice.query
+
+    if search:
+        query = query.filter(
+            db.or_(
+                PurchaseInvoice.invoice_number.contains(search),
+                PurchaseInvoice.supplier.has(Supplier.name.contains(search))
+            )
+        )
+
+    if status_filter:
+        query = query.filter(PurchaseInvoice.status == status_filter)
+
+    query = query.order_by(PurchaseInvoice.created_at.desc())
+    invoices = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template('purchase_invoices.html', invoices=invoices, search=search, status_filter=status_filter)
+
+@app.route('/purchase_invoice/<int:id>')
+@login_required
+def purchase_invoice_detail(id):
+    invoice = PurchaseInvoice.query.get_or_404(id)
+    return render_template('purchase_invoice_detail.html', invoice=invoice)
+
+@app.route('/purchase_invoice/add', methods=['GET', 'POST'])
+@login_required
+def add_purchase_invoice():
+    if request.method == 'POST':
+        data = request.get_json()
+
+        # Generate invoice number
+        invoice_number = f"PI{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+
+        # Create invoice
+        invoice = PurchaseInvoice(
+            invoice_number=invoice_number,
+            supplier_id=data['supplier_id'],
+            user_id=current_user.id,
+            branch_id=current_user.branch_id or 1,
+            invoice_date=datetime.strptime(data['invoice_date'], '%Y-%m-%d').date(),
+            total_amount=data['total_amount'],
+            tax_amount=data.get('tax_amount', 0),
+            discount_amount=data.get('discount_amount', 0),
+            notes=data.get('notes', ''),
+            status='completed'
+        )
+
+        db.session.add(invoice)
+        db.session.flush()
+
+        # Create invoice items and update inventory
+        for item in data['items']:
+            invoice_item = PurchaseInvoiceItem(
+                purchase_invoice_id=invoice.id,
+                product_id=item['product_id'],
+                quantity=item['quantity'],
+                unit_cost=item['unit_cost'],
+                total=item['total']
+            )
+            db.session.add(invoice_item)
+
+            # Create product movement
+            movement = ProductMovement(
+                product_id=item['product_id'],
+                branch_id=current_user.branch_id or 1,
+                movement_type='purchase',
+                quantity=item['quantity'],
+                user_id=current_user.id,
+                reason='Purchase Invoice',
+                notes=f'Invoice: {invoice_number}'
+            )
+            db.session.add(movement)
+
+            # Update inventory
+            inventory = Inventory.query.filter_by(
+                product_id=item['product_id'],
+                branch_id=current_user.branch_id or 1
+            ).first()
+            if inventory:
+                inventory.quantity += item['quantity']
+                inventory.last_updated = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'invoice_id': invoice.id,
+            'invoice_number': invoice_number,
+            'message': 'Purchase invoice created successfully'
+        })
+
+    suppliers = Supplier.query.filter_by(is_active=True).all()
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    return render_template('purchase_invoice_form.html', title='Add Purchase Invoice', suppliers=suppliers, today_date=today_date)
+
+@app.route('/api/products/search')
+@login_required
+def search_products():
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify([])
+
+    products = Product.query.filter(
+        Product.is_active == True,
+        db.or_(
+            Product.name.contains(query),
+            Product.sku.contains(query),
+            Product.barcodes.contains(query)
+        )
+    ).limit(10).all()
+
+    results = []
+    for product in products:
+        results.append({
+            'id': product.id,
+            'name': product.name,
+            'sku': product.sku,
+            'price': product.price,
+            'cost_price': product.cost_price or product.price,
+            'box_qty': product.box_qty
+        })
+
+    return jsonify(results)
 
 @app.route('/customers')
 @login_required

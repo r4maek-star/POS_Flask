@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - POS System{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('categories') }}">Categories</a></li>
+<li class="breadcrumb-item active">{{ title }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">{{ title }}</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Category Information</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control") }}
+                        {% if form.name.errors %}
+                            {% for error in form.name.errors %}
+                                <div class="text-danger">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=3) }}
+                        {% if form.description.errors %}
+                            {% for error in form.description.errors %}
+                                <div class="text-danger">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.parent_id.label(class="form-label") }}
+                        {{ form.parent_id(class="form-select") }}
+                        {% if form.parent_id.errors %}
+                            {% for error in form.parent_id.errors %}
+                                <div class="text-danger">{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('categories') }}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Help</h6>
+            </div>
+            <div class="card-body">
+                <h6>Category Name</h6>
+                <p class="text-muted small">Enter a descriptive name for the category.</p>
+
+                <h6>Description</h6>
+                <p class="text-muted small">Optional description to help identify the category.</p>
+
+                <h6>Parent Category</h6>
+                <p class="text-muted small">Select a parent category to create a hierarchy, or leave as "No Parent" for a top-level category.</p>
+            </div>
+        </div>
+
+        {% if category %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">Category Statistics</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-primary">{{ category.products|length }}</h4>
+                        <small class="text-muted">Products</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-info">{{ category.subcategories|length }}</h4>
+                        <small class="text-muted">Subcategories</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

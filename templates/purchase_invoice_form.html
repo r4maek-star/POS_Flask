@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - POS System{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('purchase_invoices') }}">Purchase Invoices</a></li>
+<li class="breadcrumb-item active">{{ title }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">{{ title }}</h1>
+        <p class="text-muted">Create a new purchase invoice for stock replenishment</p>
+    </div>
+</div>
+
+<form id="purchase-invoice-form">
+    <!-- Invoice Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Invoice Information</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Supplier *</label>
+                            <select class="form-select" id="supplier-select" required>
+                                <option value="">Select Supplier</option>
+                                {% for supplier in suppliers %}
+                                <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
+                                    <i class="fas fa-plus me-1"></i>Add New Supplier
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Invoice Number</label>
+                            <input type="text" class="form-control" id="invoice-number" readonly>
+                            <small class="text-muted">Auto-generated</small>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Invoice Date *</label>
+                            <input type="date" class="form-control" id="invoice-date" value="{{ today_date }}" required>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Status</label>
+                            <input type="text" class="form-control" value="Draft" readonly>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="invoice-notes" rows="2" placeholder="Additional notes for this purchase..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Products</h6>
+                    <div class="input-group" style="width: 400px;">
+                        <input type="text" class="form-control" id="product-search" placeholder="Search products by name, SKU, or barcode...">
+                        <button class="btn btn-outline-secondary" type="button" id="barcode-scan">
+                            <i class="fas fa-barcode"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary" type="button" id="add-product-btn">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="products-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Price</th>
+                                    <th>Quantity</th>
+                                    <th>Unit Cost</th>
+                                    <th>Box Support</th>
+                                    <th>Total</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-tbody">
+                                <tr id="empty-row" style="display: none;">
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm product-name" placeholder="Product name">
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm product-price" step="0.01" min="0" placeholder="0.00">
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <input type="checkbox" class="form-check-input me-2 box-checkbox">
+                                            <input type="number" class="form-control form-control-sm product-quantity" value="1" min="1">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm product-cost" step="0.01" min="0" placeholder="0.00">
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm product-box-qty" min="1" value="1" placeholder="Box qty">
+                                    </td>
+                                    <td class="product-total">$0.00</td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-primary edit-product" title="Edit Product">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-product" title="Remove">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add empty row button -->
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="add-empty-row">
+                            <i class="fas fa-plus me-1"></i>Add Empty Row
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Totals Section -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Subtotal</label>
+                            <input type="text" class="form-control" id="subtotal" value="$0.00" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tax Amount</label>
+                            <input type="number" class="form-control" id="tax-amount" step="0.01" min="0" value="0.00">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Discount Amount</label>
+                            <input type="number" class="form-control" id="discount-amount" step="0.01" min="0" value="0.00">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <strong>Total Amount:</strong>
+                        <strong id="total-amount">$0.00</strong>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-success" id="save-invoice-btn">
+                            <i class="fas fa-save me-2"></i>Save Invoice
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="save-draft-btn">
+                            <i class="fas fa-clock me-2"></i>Save as Draft
+                        </button>
+                        <a href="{{ url_for('purchase_invoices') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Add Supplier Modal -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Supplier</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-supplier-form">
+                    <div class="mb-3">
+                        <label class="form-label">Supplier Name *</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <input type="tel" class="form-control" name="phone">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <textarea class="form-control" name="address" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-supplier-btn">Save Supplier</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    let products = [];
+    let draftInterval;
+
+    // Auto-save draft every 30 seconds
+    function startAutoSave() {
+        draftInterval = setInterval(function() {
+            saveDraft();
+        }, 30000);
+    }
+
+    function saveDraft() {
+        const formData = getFormData();
+        if (formData.supplier_id && products.length > 0) {
+            localStorage.setItem('purchase_invoice_draft', JSON.stringify(formData));
+            console.log('Draft saved');
+        }
+    }
+
+    function loadDraft() {
+        const draft = localStorage.getItem('purchase_invoice_draft');
+        if (draft) {
+            const data = JSON.parse(draft);
+            // Load draft data into form
+            $('#supplier-select').val(data.supplier_id);
+            $('#invoice-date').val(data.invoice_date);
+            $('#invoice-notes').val(data.notes);
+            $('#tax-amount').val(data.tax_amount);
+            $('#discount-amount').val(data.discount_amount);
+
+            // Load products
+            products = data.items || [];
+            renderProductsTable();
+            calculateTotals();
+        }
+    }
+
+    // Product search with autocomplete
+    let searchTimeout;
+    $('#product-search').on('input', function() {
+        const query = $(this).val().trim();
+        clearTimeout(searchTimeout);
+
+        if (query.length < 2) {
+            $('#product-search-results').remove();
+            return;
+        }
+
+        searchTimeout = setTimeout(function() {
+            $.get('/api/products/search', { q: query })
+                .done(function(results) {
+                    showSearchResults(results);
+                });
+        }, 300);
+    });
+
+    function showSearchResults(results) {
+        $('#product-search-results').remove();
+
+        if (results.length === 0) return;
+
+        const resultsHtml = `
+            <div id="product-search-results" class="position-absolute bg-white border rounded shadow-sm" style="z-index: 1000; max-height: 300px; overflow-y: auto;">
+                ${results.map(product => `
+                    <div class="p-2 border-bottom product-result" data-product-id="${product.id}" style="cursor: pointer;">
+                        <strong>${product.name}</strong><br>
+                        <small class="text-muted">Price: $${product.price} | Cost: $${product.cost_price}</small>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        $('#product-search').parent().append(resultsHtml);
+
+        $('.product-result').click(function() {
+            const productId = $(this).data('product-id');
+            const product = results.find(p => p.id == productId);
+            addProductToInvoice(product);
+            $('#product-search').val('');
+            $('#product-search-results').remove();
+        });
+    }
+
+    // Add product to invoice
+    function addProductToInvoice(product) {
+        const existingProduct = products.find(p => p.product_id === product.id);
+        if (existingProduct) {
+            existingProduct.quantity += 1;
+            existingProduct.total = existingProduct.quantity * existingProduct.unit_cost;
+        } else {
+            products.push({
+                product_id: product.id,
+                name: product.name,
+                price: product.price,
+                quantity: 1,
+                unit_cost: product.cost_price,
+                box_qty: product.box_qty || 1,
+                use_box: false,
+                total: product.cost_price
+            });
+        }
+        renderProductsTable();
+        calculateTotals();
+    }
+
+    // Add empty row
+    $('#add-empty-row').click(function() {
+        products.push({
+            product_id: null,
+            name: '',
+            price: 0,
+            quantity: 1,
+            unit_cost: 0,
+            box_qty: 1,
+            use_box: false,
+            total: 0
+        });
+        renderProductsTable();
+    });
+
+    // Render products table
+    function renderProductsTable() {
+        const tbody = $('#products-tbody');
+        tbody.empty();
+
+        products.forEach((product, index) => {
+            const row = `
+                <tr>
+                    <td>
+                        <input type="text" class="form-control form-control-sm product-name" value="${product.name}" placeholder="Product name">
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm product-price" value="${product.price || 0}" step="0.01" min="0">
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <input type="checkbox" class="form-check-input me-2 box-checkbox" ${product.use_box ? 'checked' : ''}>
+                            <input type="number" class="form-control form-control-sm product-quantity" value="${product.quantity}" min="1">
+                        </div>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm product-cost" value="${product.unit_cost}" step="0.01" min="0">
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm product-box-qty" value="${product.box_qty || 1}" min="1" placeholder="Box qty">
+                    </td>
+                    <td class="product-total">$${product.total.toFixed(2)}</td>
+                    <td>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-primary edit-product" title="Edit Product" data-index="${index}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-product" title="Remove" data-index="${index}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+
+        // Bind events
+        $('.product-quantity, .product-cost, .product-price').on('input', function() {
+            const index = $(this).closest('tr').index();
+            updateProductTotal(index);
+            calculateTotals();
+        });
+
+        $('.product-box-qty').on('input', function() {
+            const index = $(this).closest('tr').index();
+            products[index].box_qty = parseInt($(this).val()) || 1;
+            updateProductTotal(index);
+            calculateTotals();
+        });
+
+        $('.box-checkbox').on('change', function() {
+            const index = $(this).closest('tr').index();
+            products[index].use_box = $(this).is(':checked');
+            updateProductTotal(index);
+            calculateTotals();
+        });
+
+        $('.remove-product').click(function() {
+            const index = $(this).data('index');
+            products.splice(index, 1);
+            renderProductsTable();
+            calculateTotals();
+        });
+
+        // Edit product functionality
+        $(document).on('click', '.edit-product', function() {
+            const index = $(this).data('index');
+            const product = products[index];
+
+            if (product && product.product_id) {
+                // Redirect to product edit page
+                window.open(`/product/edit/${product.product_id}`, '_blank');
+            } else {
+                alert('Please select a product first or use the search to find an existing product');
+            }
+        });
+    }
+
+    function updateProductTotal(index) {
+        const row = $('#products-tbody tr').eq(index);
+        const quantity = parseFloat(row.find('.product-quantity').val()) || 0;
+        const cost = parseFloat(row.find('.product-cost').val()) || 0;
+        const boxQty = parseInt(row.find('.product-box-qty').val()) || 1;
+        const useBox = row.find('.box-checkbox').is(':checked');
+
+        // Calculate effective quantity
+        const effectiveQuantity = useBox ? quantity * boxQty : quantity;
+        const total = effectiveQuantity * cost;
+
+        products[index].quantity = quantity;
+        products[index].unit_cost = cost;
+        products[index].box_qty = boxQty;
+        products[index].use_box = useBox;
+        products[index].total = total;
+
+        row.find('.product-total').text('$' + total.toFixed(2));
+    }
+
+    function calculateTotals() {
+        let subtotal = 0;
+        products.forEach(product => {
+            subtotal += product.total;
+        });
+
+        const tax = parseFloat($('#tax-amount').val()) || 0;
+        const discount = parseFloat($('#discount-amount').val()) || 0;
+        const total = subtotal + tax - discount;
+
+        $('#subtotal').val('$' + subtotal.toFixed(2));
+        $('#total-amount').text('$' + total.toFixed(2));
+    }
+
+    // Tax and discount changes
+    $('#tax-amount, #discount-amount').on('input', calculateTotals);
+
+    // Save invoice
+    $('#save-invoice-btn').click(function() {
+        saveInvoice('completed');
+    });
+
+    $('#save-draft-btn').click(function() {
+        saveInvoice('draft');
+    });
+
+    function saveInvoice(status) {
+        const formData = getFormData();
+        if (!validateForm(formData)) return;
+
+        formData.status = status;
+
+        $.ajax({
+            url: '/purchase_invoice/add',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                if (response.success) {
+                    localStorage.removeItem('purchase_invoice_draft');
+                    alert('Purchase invoice saved successfully!');
+                    window.location.href = '/purchase_invoices';
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('Error saving invoice');
+            }
+        });
+    }
+
+    function getFormData() {
+        return {
+            supplier_id: $('#supplier-select').val(),
+            invoice_date: $('#invoice-date').val(),
+            notes: $('#invoice-notes').val(),
+            items: products,
+            tax_amount: parseFloat($('#tax-amount').val()) || 0,
+            discount_amount: parseFloat($('#discount-amount').val()) || 0,
+            total_amount: parseFloat($('#total-amount').text().replace('$', '')) || 0
+        };
+    }
+
+    function validateForm(data) {
+        if (!data.supplier_id) {
+            alert('Please select a supplier');
+            return false;
+        }
+        if (!data.invoice_date) {
+            alert('Please select invoice date');
+            return false;
+        }
+        if (products.length === 0) {
+            alert('Please add at least one product');
+            return false;
+        }
+        return true;
+    }
+
+    // Add supplier
+    $('#save-supplier-btn').click(function() {
+        const formData = new FormData(document.getElementById('add-supplier-form'));
+        const supplierData = Object.fromEntries(formData);
+
+        $.ajax({
+            url: '/supplier/add',
+            method: 'POST',
+            data: supplierData,
+            success: function() {
+                $('#addSupplierModal').modal('hide');
+                $('#add-supplier-form')[0].reset();
+                location.reload(); // Refresh to load new supplier
+            },
+            error: function() {
+                alert('Error adding supplier');
+            }
+        });
+    });
+
+    // Keyboard shortcuts
+    $(document).keydown(function(e) {
+        if (e.ctrlKey) {
+            switch(e.key) {
+                case 'n':
+                    e.preventDefault();
+                    $('#add-empty-row').click();
+                    break;
+                case 's':
+                    e.preventDefault();
+                    $('#save-invoice-btn').click();
+                    break;
+            }
+        }
+    });
+
+    // Load draft on page load
+    loadDraft();
+    startAutoSave();
+
+    // Clean up on page unload
+    $(window).on('beforeunload', function() {
+        clearInterval(draftInterval);
+    });
+});
+</script>
+{% endblock %}

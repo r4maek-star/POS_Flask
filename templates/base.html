@@ -108,9 +108,19 @@
                             <i class="fas fa-users me-2"></i>Customers
                         </a>
                     </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if 'supplier' in request.endpoint %}active{% endif %}" href="{{ url_for('suppliers') }}">
+                            <i class="fas fa-truck me-2"></i>Suppliers
+                        </a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if 'purchase_invoice' in request.endpoint %}active{% endif %}" href="{{ url_for('purchase_invoices') }}">
+                            <i class="fas fa-file-invoice-dollar me-2"></i>Purchase Invoices
+                        </a>
+                    </li>
                     {% if current_user.role in ['admin', 'manager'] %}
                     <li class="nav-item mb-2">
-                        <a class="nav-link {% if 'inventory' in request.endpoint %}active{% endif %}" href="#">
+                        <a class="nav-link {% if 'inventory' in request.endpoint %}active{% endif %}" href="{{ url_for('inventory') }}">
                             <i class="fas fa-warehouse me-2"></i>Inventory
                         </a>
                     </li>

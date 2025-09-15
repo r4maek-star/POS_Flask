@@ -140,6 +140,34 @@
                         </div>
                     </div>
 
+                    <!-- New Fields: Box Support, Favorite, Expiry Date -->
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                {{ form.box_qty.label(class="form-label") }}
+                                <div class="input-group">
+                                    {{ form.box_qty(class="form-control", type="number", min="1") }}
+                                    <span class="input-group-text">per box</span>
+                                </div>
+                                <div class="form-text">Number of units per box/package</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                {{ form.is_favorite.label(class="form-label") }}
+                                {{ form.is_favorite(class="form-select") }}
+                                <div class="form-text">Mark as favorite for quick access</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                {{ form.expiry_date.label(class="form-label") }}
+                                {{ form.expiry_date(class="form-control", type="date") }}
+                                <div class="form-text">Optional expiry date for perishable items</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-flex justify-content-end gap-2">
                         <a href="{{ url_for('products') }}" class="btn btn-secondary">
                             <i class="fas fa-times me-1"></i>Cancel

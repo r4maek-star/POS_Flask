@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}Purchase Invoice {{ invoice.invoice_number }} - POS System{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('purchase_invoices') }}">Purchase Invoices</a></li>
+<li class="breadcrumb-item active">{{ invoice.invoice_number }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h3 mb-0">Purchase Invoice Details</h1>
+                <p class="text-muted mb-0">{{ invoice.invoice_number }}</p>
+            </div>
+            <div>
+                {% if invoice.status == 'draft' %}
+                <span class="badge bg-warning fs-6 me-2">Draft</span>
+                {% elif invoice.status == 'completed' %}
+                <span class="badge bg-success fs-6 me-2">Completed</span>
+                {% elif invoice.status == 'cancelled' %}
+                <span class="badge bg-secondary fs-6 me-2">Cancelled</span>
+                {% endif %}
+                <a href="{{ url_for('purchase_invoices') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Invoices
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Invoice Header Information -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Invoice Information</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Invoice Number:</strong><br>
+                        <span class="text-primary">{{ invoice.invoice_number }}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Supplier:</strong><br>
+                        <a href="{{ url_for('edit_supplier', id=invoice.supplier.id) }}" class="text-decoration-none">
+                            {{ invoice.supplier.name }}
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Invoice Date:</strong><br>
+                        {{ invoice.invoice_date.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Created:</strong><br>
+                        {{ invoice.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        <strong>User:</strong><br>
+                        {{ invoice.user.username }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Branch:</strong><br>
+                        {{ invoice.branch.name }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Notes:</strong><br>
+                        {{ invoice.notes or 'No notes' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Products Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Products ({{ invoice.items|length }} items)</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Price</th>
+                                <th>Quantity</th>
+                                <th>Unit Cost</th>
+                                <th>Box Support</th>
+                                <th>Total</th>
+                                <th>Current Stock</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invoice.items %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('product_movements', id=item.product.id) }}" class="text-decoration-none">
+                                        {{ item.product.name }}
+                                    </a>
+                                </td>
+                                <td>${{ "%.2f"|format(item.product.price) }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>${{ "%.2f"|format(item.unit_cost) }}</td>
+                                <td>
+                                    {% if item.product.box_qty %}
+                                        {{ item.product.box_qty }} per box
+                                    {% else %}
+                                        1 per box
+                                    {% endif %}
+                                </td>
+                                <td><strong>${{ "%.2f"|format(item.total) }}</strong></td>
+                                <td>
+                                    {% set total_stock = 0 %}
+                                    {% for inventory in item.product.inventories %}
+                                    {% set total_stock = total_stock + inventory.quantity %}
+                                    {% endfor %}
+                                    <span class="{% if total_stock <= item.product.min_stock %}text-danger{% elif total_stock <= item.product.min_stock * 2 %}text-warning{% else %}text-success{% endif %}">
+                                        {{ total_stock }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Totals Summary -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Financial Summary</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Subtotal:</strong>
+                    </div>
+                    <div class="col-6 text-end">
+                        ${{ "%.2f"|format(invoice.total_amount - invoice.tax_amount + invoice.discount_amount) }}
+                    </div>
+                </div>
+                {% if invoice.tax_amount > 0 %}
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Tax:</strong>
+                    </div>
+                    <div class="col-6 text-end">
+                        ${{ "%.2f"|format(invoice.tax_amount) }}
+                    </div>
+                </div>
+                {% endif %}
+                {% if invoice.discount_amount > 0 %}
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Discount:</strong>
+                    </div>
+                    <div class="col-6 text-end text-success">
+                        -${{ "%.2f"|format(invoice.discount_amount) }}
+                    </div>
+                </div>
+                {% endif %}
+                <hr>
+                <div class="row">
+                    <div class="col-6">
+                        <strong class="fs-5">Total Amount:</strong>
+                    </div>
+                    <div class="col-6 text-end">
+                        <strong class="fs-5 text-primary">${{ "%.2f"|format(invoice.total_amount) }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Stock Impact</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-success">{{ invoice.items|length }}</h4>
+                        <small class="text-muted">Products Updated</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-primary">
+                            {% set total_qty = 0 %}
+                            {% for item in invoice.items %}
+                            {% set total_qty = total_qty + item.quantity %}
+                            {% endfor %}
+                            {{ total_qty }}
+                        </h4>
+                        <small class="text-muted">Total Quantity</small>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        This invoice increased inventory by {{ total_qty }} units across {{ invoice.items|length }} products.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Related Movements -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Related Stock Movements</h6>
+            </div>
+            <div class="card-body">
+                {% set movements = [] %}
+                {% for item in invoice.items %}
+                {% for movement in item.product.movements %}
+                {% if movement.notes and invoice.invoice_number in movement.notes %}
+                {% if movements.append(movement) %}{% endif %}
+                {% endif %}
+                {% endfor %}
+                {% endfor %}
+
+                {% if movements %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Product</th>
+                                <th>Type</th>
+                                <th>Quantity</th>
+                                <th>User</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for movement in movements %}
+                            <tr>
+                                <td>{{ movement.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ movement.product.name }}</td>
+                                <td>
+                                    <span class="badge bg-success">Purchase</span>
+                                </td>
+                                <td class="text-success">+{{ movement.quantity }}</td>
+                                <td>{{ movement.user.username }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">No related movements found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
