@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block title %}POS - Point of Sale{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">POS</li>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Products Section -->
+    <div class="col-lg-8 mb-4">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Products</h5>
+                <div class="input-group" style="width: 300px;">
+                    <input type="text" class="form-control" id="product-search" placeholder="Search products...">
+                    <button class="btn btn-outline-secondary" type="button" id="search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row" id="products-grid">
+                    {% for product in products %}
+                    <div class="col-md-4 col-sm-6 mb-3">
+                        <div class="card product-card h-100" data-product-id="{{ product.id }}" data-price="{{ product.price }}" data-name="{{ product.name }}">
+                            <div class="card-body text-center">
+                                {% if product.image %}
+                                <img src="{{ url_for('static', filename='uploads/products/' + product.image) }}" class="card-img-top mb-2" style="height: 100px; object-fit: cover;" alt="{{ product.name }}">
+                                {% else %}
+                                <div class="bg-light d-flex align-items-center justify-content-center mb-2" style="height: 100px;">
+                                    <i class="fas fa-box fa-3x text-muted"></i>
+                                </div>
+                                {% endif %}
+                                <h6 class="card-title">{{ product.name }}</h6>
+                                <p class="card-text text-primary fw-bold">${{ "%.2f"|format(product.price) }}</p>
+                                <button class="btn btn-primary btn-sm add-to-cart" data-product-id="{{ product.id }}">
+                                    <i class="fas fa-plus me-1"></i>Add to Cart
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cart & Checkout Section -->
+    <div class="col-lg-4">
+        <!-- Customer Selection -->
+        <div class="card shadow mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">Customer</h6>
+            </div>
+            <div class="card-body">
+                <select class="form-select" id="customer-select">
+                    <option value="">Walk-in Customer</option>
+                    {% for customer in customers %}
+                    <option value="{{ customer.id }}">{{ customer.name }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-outline-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+                    <i class="fas fa-plus me-1"></i>Add New Customer
+                </button>
+            </div>
+        </div>
+
+        <!-- Cart -->
+        <div class="card shadow mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Cart</h6>
+                <button class="btn btn-warning btn-sm" id="hold-transaction-btn">
+                    <i class="fas fa-pause me-1"></i>Hold
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="cart-items" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Cart items will be populated here -->
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <strong>Total:</strong>
+                    <strong id="cart-total">$0.00</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment -->
+        <div class="card shadow mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">Payment</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Payment Method</label>
+                    <select class="form-select" id="payment-method">
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                        <option value="mobile">Mobile Payment</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Amount Received</label>
+                    <input type="number" class="form-control" id="amount-received" step="0.01" min="0">
+                </div>
+                <div class="mb-3">
+                    <strong>Change: <span id="change-amount">$0.00</span></strong>
+                </div>
+                <button class="btn btn-success w-100" id="complete-sale-btn" disabled>
+                    <i class="fas fa-check me-1"></i>Complete Sale
+                </button>
+            </div>
+        </div>
+
+        <!-- Held Transactions -->
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Held Transactions</h6>
+                <span class="badge bg-info" id="held-count-badge">{{ held_transactions|length }}</span>
+            </div>
+            <div class="card-body">
+                <div id="held-transactions-list" style="max-height: 200px; overflow-y: auto;">
+                    {% for held in held_transactions %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                        <div>
+                            <small class="fw-bold">{{ held.transaction_id }}</small><br>
+                            <small class="text-muted">{{ held.created_at.strftime('%H:%M') }}</small>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-success resume-btn" data-transaction-id="{{ held.transaction_id }}">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger delete-held-btn" data-transaction-id="{{ held.transaction_id }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if held_transactions|length == 0 %}
+                <p class="text-muted text-center mb-0">No held transactions</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Customer Modal -->
+<div class="modal fade" id="addCustomerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Customer</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-customer-form">
+                    <div class="mb-3">
+                        <label class="form-label">Name *</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <input type="tel" class="form-control" name="phone">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <textarea class="form-control" name="address" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-customer-btn">Save Customer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hold Transaction Modal -->
+<div class="modal fade" id="holdTransactionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Hold Transaction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="hold-transaction-form">
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" name="notes" rows="3" placeholder="Add any notes for this held transaction..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirm-hold-btn">Hold Transaction</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    let cart = [];
+    let currentCustomer = null;
+
+    // Add to cart functionality
+    $('.add-to-cart').click(function() {
+        const productId = $(this).data('product-id');
+        const productCard = $(this).closest('.product-card');
+        const productName = productCard.find('.card-title').text();
+        const productPrice = parseFloat(productCard.data('price'));
+
+        addToCart(productId, productName, productPrice);
+        updateCartDisplay();
+    });
+
+    // Hold transaction
+    $('#hold-transaction-btn').click(function() {
+        if (cart.length === 0) {
+            alert('Cart is empty!');
+            return;
+        }
+        $('#holdTransactionModal').modal('show');
+    });
+
+    $('#confirm-hold-btn').click(function() {
+        const notes = $('#hold-transaction-form textarea[name="notes"]').val();
+
+        $.ajax({
+            url: '/api/hold_transaction',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                cart: cart,
+                customer: currentCustomer,
+                notes: notes
+            }),
+            success: function(response) {
+                if (response.success) {
+                    cart = [];
+                    currentCustomer = null;
+                    updateCartDisplay();
+                    $('#customer-select').val('');
+                    $('#holdTransactionModal').modal('hide');
+                    $('#hold-transaction-form')[0].reset();
+                    alert('Transaction held successfully!');
+                    location.reload(); // Refresh to update held transactions list
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('Error holding transaction');
+            }
+        });
+    });
+
+    // Resume transaction
+    $('.resume-btn').click(function() {
+        const transactionId = $(this).data('transaction-id');
+
+        $.ajax({
+            url: '/api/resume_transaction/' + transactionId,
+            method: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    cart = response.cart;
+                    currentCustomer = response.customer;
+                    updateCartDisplay();
+                    if (currentCustomer && currentCustomer.id) {
+                        $('#customer-select').val(currentCustomer.id);
+                    }
+                    alert('Transaction resumed successfully!');
+                    location.reload(); // Refresh to update held transactions list
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('Error resuming transaction');
+            }
+        });
+    });
+
+    // Delete held transaction
+    $('.delete-held-btn').click(function() {
+        if (!confirm('Are you sure you want to delete this held transaction?')) {
+            return;
+        }
+
+        const transactionId = $(this).data('transaction-id');
+
+        $.ajax({
+            url: '/api/delete_held_transaction/' + transactionId,
+            method: 'DELETE',
+            success: function(response) {
+                if (response.success) {
+                    alert('Transaction deleted successfully!');
+                    location.reload(); // Refresh to update held transactions list
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('Error deleting transaction');
+            }
+        });
+    });
+
+    // Customer selection
+    $('#customer-select').change(function() {
+        const customerId = $(this).val();
+        if (customerId) {
+            // Find customer data
+            const customerOption = $(this).find('option:selected');
+            currentCustomer = {
+                id: customerId,
+                name: customerOption.text()
+            };
+        } else {
+            currentCustomer = null;
+        }
+    });
+
+    // Payment calculations
+    $('#amount-received').on('input', function() {
+        const received = parseFloat($(this).val()) || 0;
+        const total = getCartTotal();
+        const change = received - total;
+        $('#change-amount').text('$' + change.toFixed(2));
+    });
+
+    // Complete sale
+    $('#complete-sale-btn').click(function() {
+        if (cart.length === 0) {
+            alert('Cart is empty!');
+            return;
+        }
+
+        const paymentMethod = $('#payment-method').val();
+        const amountReceived = parseFloat($('#amount-received').val()) || 0;
+        const total = getCartTotal();
+
+        if (paymentMethod === 'cash' && amountReceived < total) {
+            alert('Amount received is less than total!');
+            return;
+        }
+
+        // Here you would typically send the transaction data to the server
+        alert('Sale completed successfully! Total: $' + total.toFixed(2));
+        cart = [];
+        currentCustomer = null;
+        updateCartDisplay();
+        $('#customer-select').val('');
+        $('#amount-received').val('');
+        $('#change-amount').text('$0.00');
+    });
+
+    // Helper functions
+    function addToCart(productId, name, price) {
+        const existingItem = cart.find(item => item.product_id === productId);
+        if (existingItem) {
+            existingItem.quantity += 1;
+        } else {
+            cart.push({
+                product_id: productId,
+                name: name,
+                price: price,
+                quantity: 1
+            });
+        }
+    }
+
+    function updateCartDisplay() {
+        const cartItemsContainer = $('#cart-items');
+        cartItemsContainer.empty();
+
+        if (cart.length === 0) {
+            cartItemsContainer.html('<p class="text-muted text-center">Cart is empty</p>');
+            $('#complete-sale-btn').prop('disabled', true);
+            $('#hold-transaction-btn').prop('disabled', true);
+            return;
+        }
+
+        cart.forEach((item, index) => {
+            const itemTotal = item.price * item.quantity;
+            const itemHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <strong>${item.name}</strong><br>
+                        <small class="text-muted">$${item.price.toFixed(2)} x ${item.quantity}</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">$${itemTotal.toFixed(2)}</span>
+                        <button class="btn btn-sm btn-outline-danger remove-item" data-index="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            cartItemsContainer.append(itemHtml);
+        });
+
+        $('#cart-total').text('$' + getCartTotal().toFixed(2));
+        $('#complete-sale-btn').prop('disabled', false);
+        $('#hold-transaction-btn').prop('disabled', false);
+
+        // Remove item functionality
+        $('.remove-item').click(function() {
+            const index = $(this).data('index');
+            cart.splice(index, 1);
+            updateCartDisplay();
+        });
+    }
+
+    function getCartTotal() {
+        return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+    }
+
+    // Product search
+    $('#product-search').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('.product-card').each(function() {
+            const productName = $(this).find('.card-title').text().toLowerCase();
+            if (productName.includes(searchTerm)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+
+    // Add customer
+    $('#save-customer-btn').click(function() {
+        const formData = new FormData(document.getElementById('add-customer-form'));
+        const customerData = Object.fromEntries(formData);
+
+        // Here you would send the data to the server to create a new customer
+        alert('Customer added successfully!');
+        $('#addCustomerModal').modal('hide');
+        $('#add-customer-form')[0].reset();
+        // You might want to refresh the customer list here
+    });
+});
+</script>
+{% endblock %}

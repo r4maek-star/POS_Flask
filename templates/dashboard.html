@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - POS System{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">Dashboard</h1>
+        <p class="text-muted">Welcome back, {{ current_user.username }}!</p>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Today's Sales
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            ${{ "%.2f"|format(total_sales) }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-dollar-sign fa-2x text-primary"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Today's Transactions
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ total_transactions }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-shopping-cart fa-2x text-success"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Low Stock Items
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ low_stock_products }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            Held Transactions
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="held-count">
+                            {{ held_transactions_count }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-pause-circle fa-2x text-info"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('pos') }}" class="btn btn-primary btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                            <i class="fas fa-cash-register fa-2x mb-2"></i>
+                            <span>Start POS</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('add_product') }}" class="btn btn-success btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                            <i class="fas fa-plus fa-2x mb-2"></i>
+                            <span>Add Product</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('add_customer') }}" class="btn btn-info btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                            <i class="fas fa-user-plus fa-2x mb-2"></i>
+                            <span>Add Customer</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('reports') }}" class="btn btn-warning btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                            <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                            <span>View Reports</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity & Alerts -->
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Recent Activity</h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center py-4">
+                    <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Activity tracking coming soon...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Alerts</h6>
+            </div>
+            <div class="card-body">
+                {% if low_stock_products > 0 %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    {{ low_stock_products }} products are running low on stock
+                </div>
+                {% endif %}
+
+                {% if held_transactions_count > 0 %}
+                <div class="alert alert-info">
+                    <i class="fas fa-pause-circle me-2"></i>
+                    You have {{ held_transactions_count }} held transaction{{ 's' if held_transactions_count > 1 else '' }}
+                    <a href="{{ url_for('pos') }}" class="alert-link">Manage them</a>
+                </div>
+                {% endif %}
+
+                {% if low_stock_products == 0 and held_transactions_count == 0 %}
+                <div class="text-center py-4">
+                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                    <p class="text-muted">All systems running smoothly!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    // Update held transactions count every 30 seconds
+    function updateHeldCount() {
+        $.get('/api/held_transactions_count', function(data) {
+            $('#held-count').text(data.count);
+            if (data.count > 0) {
+                $('#held-count').closest('.card').addClass('border-info');
+            } else {
+                $('#held-count').closest('.card').removeClass('border-info');
+            }
+        });
+    }
+
+    // Update every 30 seconds
+    setInterval(updateHeldCount, 30000);
+});
+</script>
+{% endblock %}

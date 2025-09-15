@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Support - POS System{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+<li class="breadcrumb-item active">Support</li>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">Support Center</h1>
+        <p class="text-muted">Get help and support for the POS system</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Support Tickets -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Your Support Tickets</h6>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newTicketModal">
+                    <i class="fas fa-plus me-1"></i>New Ticket
+                </button>
+            </div>
+            <div class="card-body">
+                {% if tickets %}
+                <div class="list-group">
+                    {% for ticket in tickets %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ ticket.title }}</h6>
+                            <small>
+                                {% if ticket.status == 'open' %}
+                                <span class="badge bg-danger">Open</span>
+                                {% elif ticket.status == 'in_progress' %}
+                                <span class="badge bg-warning">In Progress</span>
+                                {% elif ticket.status == 'resolved' %}
+                                <span class="badge bg-success">Resolved</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Closed</span>
+                                {% endif %}
+                            </small>
+                        </div>
+                        <p class="mb-1">{{ ticket.description[:100] }}{% if ticket.description|length > 100 %}...{% endif %}</p>
+                        <small class="text-muted">{{ ticket.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-ticket-alt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No support tickets</h5>
+                    <p class="text-muted">You haven't submitted any support tickets yet.</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newTicketModal">
+                        <i class="fas fa-plus me-1"></i>Create First Ticket
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Quick Help -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">Quick Help</h6>
+            </div>
+            <div class="card-body">
+                <div class="accordion" id="helpAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                How to process a sale?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                Go to POS → Add products to cart → Select payment method → Complete sale.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                How to hold a transaction?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                Add items to cart → Click "Hold" button → Add notes → Transaction is saved for later.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                How to manage inventory?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                Go to Products → Add/Edit products → Set stock levels and minimum thresholds.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Contact Support</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>Email:</strong><br>
+                    <a href="mailto:support@possystem.com">support@possystem.com</a>
+                </div>
+                <div class="mb-2">
+                    <strong>Phone:</strong><br>
+                    <a href="tel:+1234567890">+1 (234) 567-8900</a>
+                </div>
+                <div class="mb-0">
+                    <strong>Hours:</strong><br>
+                    Mon-Fri: 9AM-6PM EST
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Ticket Modal -->
+<div class="modal fade" id="newTicketModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Support Ticket</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="new-ticket-form">
+                    <div class="mb-3">
+                        <label class="form-label">Subject *</label>
+                        <input type="text" class="form-control" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Priority</label>
+                        <select class="form-select" name="priority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description *</label>
+                        <textarea class="form-control" name="description" rows="4" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submit-ticket-btn">Submit Ticket</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
