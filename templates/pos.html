@@ -7,9 +7,6 @@
 {% endblock %}
 
 {% block content %}
-<!-- Hidden element to pass data to JavaScript -->
-<div id="page-data" data-action="{{ action }}" data-has-held="{{ 'true' if held_transactions else 'false' }}" style="display: none;"></div>
-
 <div class="row">
     <!-- Products Section -->
     <div class="col-lg-8 mb-4">
@@ -107,16 +104,13 @@
                         <option value="mobile">Mobile Payment</option>
                     </select>
                 </div>
-                <!-- Amount Received and Change fields are hidden -->
-                <!--
-                <div class="mb-3" style="display: none;">
+                <div class="mb-3">
                     <label class="form-label">Amount Received</label>
                     <input type="number" class="form-control" id="amount-received" step="0.01" min="0">
                 </div>
-                <div class="mb-3" style="display: none;">
+                <div class="mb-3">
                     <strong>Change: <span id="change-amount">$0.00</span></strong>
                 </div>
-                -->
                 <button class="btn btn-success w-100" id="complete-sale-btn" disabled>
                     <i class="fas fa-check me-1"></i>Complete Sale
                 </button>
@@ -222,182 +216,6 @@
 $(document).ready(function() {
     let cart = [];
     let currentCustomer = null;
-    let autoSaveInterval;
-    let isOnline = navigator.onLine;
-
-    // Load cart from LocalStorage on page load (silent restoration)
-    loadCartFromStorage();
-
-    // Check if we should show held transactions modal
-    const pageData = $('#page-data');
-    const action = pageData.data('action');
-    const hasHeld = pageData.data('has-held') === 'true';
-
-    if (action === 'show_held' && hasHeld) {
-        setTimeout(function() {
-            $('#heldTransactionsModal').modal('show');
-        }, 500); // Small delay to ensure modal is ready
-    }
-
-    // Auto-save cart every 30 seconds
-    autoSaveInterval = setInterval(function() {
-        if (cart.length > 0) {
-            saveCartToStorage();
-            if (isOnline) {
-                autoSaveToDatabase();
-            }
-        }
-    }, 30000);
-
-    // Monitor online/offline status
-    window.addEventListener('online', function() {
-        isOnline = true;
-        console.log('Back online - syncing data...');
-        if (cart.length > 0) {
-            autoSaveToDatabase();
-        }
-        showOnlineStatus('Back Online', 'success');
-    });
-
-    window.addEventListener('offline', function() {
-        isOnline = false;
-        console.log('Gone offline - using local storage');
-        showOnlineStatus('Offline Mode', 'warning');
-    });
-
-    // Warn before closing/leaving page
-    window.addEventListener('beforeunload', function(e) {
-        if (cart.length > 0) {
-            saveCartToStorage(); // Final save to LocalStorage
-            // Don't show browser's default dialog - we handle this with our custom notifications
-            // e.returnValue = ''; // This would show the browser dialog
-            // return ''; // This would also show the browser dialog
-        }
-    });
-
-    // Save cart to LocalStorage
-    function saveCartToStorage() {
-        try {
-            const cartData = {
-                cart: cart,
-                customer: currentCustomer,
-                timestamp: new Date().toISOString()
-            };
-            localStorage.setItem('pos_cart', JSON.stringify(cartData));
-            console.log('Cart saved to LocalStorage');
-        } catch (e) {
-            console.error('Failed to save cart to LocalStorage:', e);
-        }
-    }
-
-    // Load cart from LocalStorage
-    function loadCartFromStorage() {
-        try {
-            const savedData = localStorage.getItem('pos_cart');
-            if (savedData) {
-                const cartData = JSON.parse(savedData);
-                const savedTime = new Date(cartData.timestamp);
-                const now = new Date();
-                const hoursDiff = (now - savedTime) / (1000 * 60 * 60);
-
-                // Only load if saved within last 24 hours
-                if (hoursDiff < 24) {
-                    cart = cartData.cart || [];
-                    currentCustomer = cartData.customer;
-                    updateCartDisplay();
-
-                    // Silent restoration - no notification shown
-                    console.log('Cart silently restored from LocalStorage');
-
-                    console.log('Cart loaded from LocalStorage');
-                } else {
-                    // Clear old data
-                    localStorage.removeItem('pos_cart');
-                }
-            }
-        } catch (e) {
-            console.error('Failed to load cart from LocalStorage:', e);
-        }
-    }
-
-    // Auto-save to database (create held transaction)
-    function autoSaveToDatabase() {
-        if (cart.length === 0) return;
-
-        // Generate auto-save transaction ID
-        const autoSaveId = 'AUTO' + Date.now();
-
-        $.ajax({
-            url: '/api/hold_transaction',
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                cart: cart,
-                customer: currentCustomer,
-                notes: 'Auto-saved cart',
-                auto_save: true,
-                transaction_id: autoSaveId
-            }),
-            success: function(response) {
-                if (response.success) {
-                    console.log('Cart auto-saved to database');
-                    // Update the auto-saved transaction ID for future updates
-                    localStorage.setItem('auto_save_id', autoSaveId);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('Auto-save failed:', error);
-            }
-        });
-    }
-
-    // Show online/offline status
-    function showOnlineStatus(message, type) {
-        const alertClass = type === 'success' ? 'alert-success' : 'alert-warning';
-        const alertHtml = `
-            <div class="alert ${alertClass} alert-dismissible fade show position-fixed"
-                 style="top: 70px; right: 20px; z-index: 9999; min-width: 300px;">
-                <i class="fas fa-${type === 'success' ? 'wifi' : 'exclamation-triangle'} me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-
-        // Remove existing alerts
-        $('.alert.position-fixed').remove();
-
-        // Add new alert
-        $('body').append(alertHtml);
-
-        // Auto-remove after 5 seconds
-        setTimeout(function() {
-            $('.alert.position-fixed').fadeOut();
-        }, 5000);
-    }
-
-    // Show notification
-    function showNotification(message, type = 'info') {
-        const alertClass = `alert-${type}`;
-        const alertHtml = `
-            <div class="alert ${alertClass} alert-dismissible fade show position-fixed"
-                 style="top: 70px; right: 20px; z-index: 9999; min-width: 300px;">
-                <i class="fas fa-info-circle me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-
-        // Remove existing alerts
-        $('.alert.position-fixed').remove();
-
-        // Add new alert
-        $('body').append(alertHtml);
-
-        // Auto-remove after 3 seconds
-        setTimeout(function() {
-            $('.alert.position-fixed').fadeOut();
-        }, 3000);
-    }
 
     // Add to cart functionality
     $('.add-to-cart').click(function() {
@@ -408,7 +226,6 @@ $(document).ready(function() {
 
         addToCart(productId, productName, productPrice);
         updateCartDisplay();
-        saveCartToStorage(); // Save immediately when cart changes
     });
 
     // Hold transaction
@@ -434,30 +251,24 @@ $(document).ready(function() {
             }),
             success: function(response) {
                 if (response.success) {
-                    // Clear cart and storage after successful hold
                     cart = [];
                     currentCustomer = null;
-                    localStorage.removeItem('pos_cart');
-                    localStorage.removeItem('auto_save_id');
-
                     updateCartDisplay();
                     $('#customer-select').val('');
                     $('#holdTransactionModal').modal('hide');
                     $('#hold-transaction-form')[0].reset();
-
-                    // Show success notification instead of alert
-                    showNotification('Transaction held successfully!', 'success');
-
-                    // Refresh page after short delay to show updated notifications
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1000);
+                    alert('Transaction held successfully!');
+                    location.reload(); // Refresh to update held transactions list
+                    // Update notification count
+                    if (typeof updateHeldTransactionsCount === 'function') {
+                        updateHeldTransactionsCount();
+                    }
                 } else {
-                    showNotification('Error: ' + response.message, 'error');
+                    alert('Error: ' + response.message);
                 }
             },
             error: function() {
-                showNotification('Error holding transaction', 'error');
+                alert('Error holding transaction');
             }
         });
     });
@@ -473,20 +284,16 @@ $(document).ready(function() {
                 if (response.success) {
                     cart = response.cart;
                     currentCustomer = response.customer;
-
-                    // Clear any auto-saved data since we're loading from database
-                    localStorage.removeItem('pos_cart');
-                    localStorage.removeItem('auto_save_id');
-
                     updateCartDisplay();
                     if (currentCustomer && currentCustomer.id) {
                         $('#customer-select').val(currentCustomer.id);
                     }
-                    showNotification('Transaction resumed successfully!', 'success');
-                    // Refresh page after short delay to show updated notifications
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1000);
+                    alert('Transaction resumed successfully!');
+                    location.reload(); // Refresh to update held transactions list
+                    // Update notification count
+                    if (typeof updateHeldTransactionsCount === 'function') {
+                        updateHeldTransactionsCount();
+                    }
                 } else {
                     alert('Error: ' + response.message);
                 }
@@ -510,13 +317,14 @@ $(document).ready(function() {
             method: 'DELETE',
             success: function(response) {
                 if (response.success) {
-                    showNotification('Transaction deleted successfully!', 'success');
-                    // Refresh page after short delay to show updated notifications
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1000);
+                    alert('Transaction deleted successfully!');
+                    location.reload(); // Refresh to update held transactions list
+                    // Update notification count
+                    if (typeof updateHeldTransactionsCount === 'function') {
+                        updateHeldTransactionsCount();
+                    }
                 } else {
-                    showNotification('Error: ' + response.message, 'error');
+                    alert('Error: ' + response.message);
                 }
             },
             error: function() {
@@ -538,7 +346,6 @@ $(document).ready(function() {
         } else {
             currentCustomer = null;
         }
-        saveCartToStorage(); // Save when customer changes
     });
 
     // Payment calculations
@@ -552,40 +359,27 @@ $(document).ready(function() {
     // Complete sale
     $('#complete-sale-btn').click(function() {
         if (cart.length === 0) {
-            showNotification('Cart is empty!', 'warning');
+            alert('Cart is empty!');
             return;
         }
 
         const paymentMethod = $('#payment-method').val();
+        const amountReceived = parseFloat($('#amount-received').val()) || 0;
         const total = getCartTotal();
 
-        // Create transaction data
-        const transactionData = {
-            customer_id: currentCustomer ? currentCustomer.id : null,
-            total_amount: total,
-            payment_method: paymentMethod,
-            items: cart.map(item => ({
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.price,
-                total: item.price * item.quantity
-            }))
-        };
+        if (paymentMethod === 'cash' && amountReceived < total) {
+            alert('Amount received is less than total!');
+            return;
+        }
 
-        // Send transaction to server (you would implement this endpoint)
-        console.log('Transaction data:', transactionData);
-
-        // Show success message
-        showNotification('Sale completed successfully! Total: $' + total.toFixed(2), 'success');
-
-        // Clear cart and storage
+        // Here you would typically send the transaction data to the server
+        alert('Sale completed successfully! Total: $' + total.toFixed(2));
         cart = [];
         currentCustomer = null;
-        localStorage.removeItem('pos_cart');
-        localStorage.removeItem('auto_save_id');
-
         updateCartDisplay();
         $('#customer-select').val('');
+        $('#amount-received').val('');
+        $('#change-amount').text('$0.00');
     });
 
     // Helper functions
@@ -642,7 +436,6 @@ $(document).ready(function() {
             const index = $(this).data('index');
             cart.splice(index, 1);
             updateCartDisplay();
-            saveCartToStorage(); // Save when item is removed
         });
     }
 
@@ -707,47 +500,6 @@ $(document).ready(function() {
         $('#addCustomerModal').modal('hide');
         $('#add-customer-form')[0].reset();
         // You might want to refresh the customer list here
-    });
-
-    // Update count every 30 seconds
-    setInterval(updateHeldTransactionsCount, 30000);
-
-    // Update count when page loads
-    document.addEventListener('DOMContentLoaded', updateHeldTransactionsCount);
-
-    // Save data when page becomes hidden (user switches tabs)
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden && cart.length > 0) {
-            saveCartToStorage();
-            console.log('Page hidden - cart saved to LocalStorage');
-        }
-    });
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
-        // Ctrl+S to manually save
-        if (e.ctrlKey && e.key === 's') {
-            e.preventDefault();
-            if (cart.length > 0) {
-                saveCartToStorage();
-                showNotification('Cart saved manually', 'success');
-            }
-        }
-
-        // Ctrl+H to hold transaction
-        if (e.ctrlKey && e.key === 'h') {
-            e.preventDefault();
-            if (cart.length > 0) {
-                $('#hold-transaction-btn').click();
-            }
-        }
-    });
-
-    // Clear auto-save interval when page unloads
-    window.addEventListener('unload', function() {
-        if (autoSaveInterval) {
-            clearInterval(autoSaveInterval);
-        }
     });
 });
 </script>

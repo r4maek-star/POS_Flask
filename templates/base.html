@@ -47,7 +47,7 @@
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notifications-dropdown">
                         <li><h6 class="dropdown-header">Notifications</h6></li>
                         {% if held_transactions_count > 0 %}
-                        <li><a class="dropdown-item" href="{{ url_for('pos', action='show_held') }}">
+                        <li><a class="dropdown-item" href="{{ url_for('pos') }}">
                             <i class="fas fa-pause text-warning me-2"></i>
                             {{ held_transactions_count }} Held Transaction{{ 's' if held_transactions_count > 1 else '' }}
                         </a></li>

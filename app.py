@@ -341,7 +341,6 @@ def logout():
 @login_required
 def pos():
     search = request.args.get('search', '').strip()
-    action = request.args.get('action', '')
 
     # Base query for products
     query = Product.query.filter_by(is_active=True)
@@ -376,8 +375,7 @@ def pos():
                           customers=customers,
                           held_transactions=held_transactions,
                           held_transactions_count=held_transactions_count,
-                          search=search,
-                          action=action)
+                          search=search)
 
 @app.route('/api/hold_transaction', methods=['POST'])
 @login_required
